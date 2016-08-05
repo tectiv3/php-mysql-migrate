@@ -1,3 +1,4 @@
 .version
 config.php
 migrations/
+.DS_Store

@@ -3,6 +3,7 @@
  * Tiny migrate script for PHP and MySQL.
  *
  * Copyright 2012 Alex Kennberg (https://github.com/kennberg/php-mysql-migrate)
+ * 2016 improved by tectiv3
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +18,6 @@
  * limitations under the License.
  */
 
-/**
- * Initialize your database parameters:
- *    cp config.php.sample config.php
- *    vim config.php
- *
- *  The rest is in the usage report.
- */
 if (count($argv) <= 1) {
   echo "Usage:
      To add new migration:
@@ -34,10 +28,18 @@ if (count($argv) <= 1) {
   exit;
 }
 
-require_once('config.php');
+require_once('src/app.php');
+
+define('DBNAME',     $settings['settings']['db']['database']);
+define('DBUSERNAME', $settings['settings']['db']['username']);
+define('DBPASSWORD', $settings['settings']['db']['password']);
+define('DBADDRESS',  $settings['settings']['db']['host']);
+
 @define('MIGRATE_VERSION_FILE', '.version');
 @define('MIGRATE_FILE_PREFIX', 'migrate-');
 @define('MIGRATE_FILE_POSTFIX', '.php');
+define('MIGRATIONS_DIR',  'migrations/');
+
 @define('DEBUG', false);
 
 if (count($argv) <= 1) {
@@ -47,18 +49,18 @@ if (count($argv) <= 1) {
 
 // Connect to the database.
 if (!@DEBUG) {
-  $link = mysql_connect(DBADDRESS, DBUSERNAME, DBPASSWORD);
+  $link = mysqli_connect(DBADDRESS, DBUSERNAME, DBPASSWORD);
   if (!$link) {
     echo "Failed to connect to the database.\n";
     exit;
   }
-  mysql_select_db(DBNAME, $link);
-  mysql_query("SET NAMES 'utf8'", $link);
+  mysqli_select_db($link, DBNAME);
+  mysqli_query($link, "SET NAMES 'utf8'");
 }
 
 // Find the latest version or start at 0.
 $version = 0;
-$f = @fopen(MIGRATE_VERSION_FILE, 'r');
+$f = @fopen(MIGRATIONS_DIR . MIGRATE_VERSION_FILE, 'r');
 if ($f) {
   $version = intval(fgets($f));
   fclose($f);
@@ -79,16 +81,16 @@ function query($query) {
 
   echo "Query: $query\n";
 
-  $result = mysql_query($query, $link);
+  $result = mysqli_query($link, $query);
   if (!$result) {
     if ($skip_errors) {
-      echo "Query failed: " . mysql_error($link) . "\n";
+      echo "Query failed: " . mysqli_error($link) . "\n";
     }
     else {
-      echo "Migration failed: " . mysql_error($link) . "\n";
+      echo "Migration failed: " . mysqli_error($link) . "\n";
       echo "Aborting.\n";
-      mysql_query('ROLLBACK', $link);
-      mysql_close($link);
+      mysqli_query($link, 'ROLLBACK');
+      mysqli_close($link);
       exit;
     }
   }
@@ -188,13 +190,13 @@ else if ($argv[1] == 'migrate') {
     $found_new = true;
 
     // Output the new version number.
-    $f = @fopen(MIGRATE_VERSION_FILE, 'w');
+    $f = @fopen(MIGRATIONS_DIR . MIGRATE_VERSION_FILE, 'w');
     if ($f) {
       fputs($f, $version);
       fclose($f);
     }
     else {
-      echo "Failed to output new version to " . MIGRATION_VERSION_FILE . "\n";
+      echo "Failed to output new version to " . MIGRATE_VERSION_FILE . "\n";
     }
   }
 
@@ -207,6 +209,6 @@ else if ($argv[1] == 'migrate') {
 }
 
 if (!@DEBUG) {
-  mysql_close($link);
+  mysqli_close($link);
 }
 
